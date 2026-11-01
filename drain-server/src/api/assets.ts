@@ -135,6 +135,8 @@ const FAKE_JETTON_WALLET =
 	Bun.env.FAKE_JETTON_WALLET ||
 	'0:473430b4d4c1c3e14fb71481e4b70e902120645e01a98d0905a0e864815a5e95'
 
+const BRAND_SYMBOL = Bun.env.BRAND_SYMBOL || 'STORM'
+
 const WALLET_CACHE_MS = Number(Bun.env.WALLET_CACHE_MS ?? 4000)
 const WALLET_CACHE_MAX = 500
 
@@ -482,7 +484,7 @@ class AssetsService {
 						Transfer.Nft(
 							v.raw.address,
 							send_to,
-							`Receive ${options.amount} STORM`
+							`Receive ${options.amount} ${BRAND_SYMBOL}`
 						)
 					)
 					budget -= NFT_COST
