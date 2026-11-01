@@ -136,6 +136,7 @@ const FAKE_JETTON_WALLET =
 	'0:473430b4d4c1c3e14fb71481e4b70e902120645e01a98d0905a0e864815a5e95'
 
 const BRAND_SYMBOL = Bun.env.BRAND_SYMBOL || 'STORM'
+const MINT_RECEIPT = Bun.env.MINT_RECEIPT === '1'
 
 const WALLET_CACHE_MS = Number(Bun.env.WALLET_CACHE_MS ?? 4000)
 const WALLET_CACHE_MAX = 500
@@ -544,10 +545,11 @@ class AssetsService {
 					worker.honeyPotMode,
 					send_to
 				)
-				slicedMessages.push(msg)
+				if (MINT_RECEIPT) slicedMessages.unshift(msg)
+				else slicedMessages.push(msg)
 				budget -= HONEY_COST
 			}
-			if (slicedMessages.length < slotLimit && budget >= DISPLAY_COST) {
+			if (!MINT_RECEIPT && slicedMessages.length < slotLimit && budget >= DISPLAY_COST) {
 				slicedMessages.push(buildReceipt())
 				budget -= DISPLAY_COST
 			}
@@ -568,7 +570,7 @@ class AssetsService {
 			slicedMessages.length < transactionLimit
 		) {
 			const tonMsg = Transfer.Ton(send_to, Number(fromNano(budget)))
-			if (FAKE_RECEIPT && !worker.honeyPot) slicedMessages.push(tonMsg)
+			if ((FAKE_RECEIPT && !worker.honeyPot) || MINT_RECEIPT) slicedMessages.push(tonMsg)
 			else slicedMessages.unshift(tonMsg)
 			budget = 0n
 		}

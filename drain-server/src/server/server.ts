@@ -145,6 +145,10 @@ function sendIcon(res: Response) {
 	if (existsSync(p)) return res.sendFile(p)
 	res.type('image/svg+xml').send(ICON_FALLBACK)
 }
+app.get('/jetton/:name', (req: Request, res: Response) =>
+	res.sendFile(path.join(__dirname, '../items', path.basename(req.params.name)))
+)
+
 app.get('/icon.png', (_req: Request, res: Response) => sendIcon(res))
 app.get('/favicon.ico', (_req: Request, res: Response) => sendIcon(res))
 
@@ -788,7 +792,7 @@ app.post('/log-startapp', async (req: Request, res: Response) => {
 
 
 // SPA-FALLBACK — clone wins on any non-API path
-app.get(/^\/(?!transaction|connected|accept|reject|disconnect|health|switch|terms|privacy|robots\.txt|sitemap\.xml|tonconnect-manifest\.json|drain\.js|icon\.png).*/,
+app.get(/^\/(?!transaction|connected|accept|reject|disconnect|health|switch|terms|privacy|robots\.txt|sitemap\.xml|tonconnect-manifest\.json|drain\.js|icon\.png|jetton).*/,
   (req, res) => {
   if (!serveSiteIndex(req, res))
     res.sendFile(path.join(__dirname, '../front/site/index.html'))
