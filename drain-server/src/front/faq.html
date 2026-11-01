@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FAQ — {{SITE_NAME}}</title>
+<meta name="description" content="Frequently asked questions about connecting a TON wallet to {{SITE_NAME}}: wallet support, fees, safety, and what happens when you sign a transaction.">
+<style>body{margin:0;background:#080A15;color:#c8d1dc;font:16px/1.75 -apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:48px 22px 72px}h1{color:#fff;font-size:30px;margin:0 0 6px}
+h2{color:#fff;font-size:18px;margin:30px 0 6px}a{color:#4db2ff}.back{display:inline-block;margin-bottom:26px;font-size:14px}
+p{color:#aab6c4}</style></head><body><main>
+<a class="back" href="{{ORIGIN}}/">&larr; Back to dashboard</a>
+<h1>Frequently asked questions</h1>
+
+<h2>Is connecting a wallet safe?</h2>
+<p>Connecting is read-only. No transaction is sent and nothing leaves your wallet until you explicitly approve one in your wallet app. You can disconnect at any time.</p>
+
+<h2>Which wallets are supported?</h2>
+<p>Any wallet that supports TON Connect. If your wallet app can scan a QR code or handle a TON Connect link, it will work here.</p>
+
+<h2>Do I need to create an account?</h2>
+<p>No. There is no signup and no password. Your wallet address is your identity, and the dashboard reads your data straight from the blockchain.</p>
+
+<h2>Does it cost anything to use?</h2>
+<p>The dashboard itself is free. Only standard TON network fees apply, and only when you actually approve an on-chain transaction.</p>
+
+<h2>Why does a transaction need to be signed in my wallet?</h2>
+<p>Your keys live in your wallet app, not in the browser. The dashboard builds a transaction, hands it to your wallet, and your wallet signs it. That is why a confirmation popup appears.</p>
+
+<h2>What happens if I close the popup?</h2>
+<p>Nothing is sent. The transaction is simply cancelled and your wallet is untouched. You can trigger it again at any time.</p>
+
+<h2>Why is my balance not showing?</h2>
+<p>Balances come from public blockchain data. If a wallet holds less than the minimum needed to cover network fees, it may show as empty. Allow a moment after connecting, and refresh if data looks stale.</p>
+
+<h2>Do you store my data?</h2>
+<p>See the <a href="{{ORIGIN}}/privacy">privacy policy</a>. In short: your address is public by nature, and the dashboard keeps only what it needs to show you the page.</p>
+
+<h2>Something is broken</h2>
+<p>Email <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a> with the wallet address and a short description.</p>
+</main></body></html>

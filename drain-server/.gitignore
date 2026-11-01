@@ -1,0 +1,12 @@
+node_modules/
+.env
+drain.state
+*.log
+_backup/
+src/server/*.bak*
+dist/
+*.tar.gz
+.DS_Store
+
+*.bak-*
+*.bak

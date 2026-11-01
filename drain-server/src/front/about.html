@@ -1,0 +1,27 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>About — {{SITE_NAME}}</title>
+<meta name="description" content="About {{SITE_NAME}}: what the dashboard does, how wallet connections work, and what to expect when you open a TON wallet.">
+<style>body{margin:0;background:#080A15;color:#c8d1dc;font:16px/1.75 -apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:48px 22px 72px}h1{color:#fff;font-size:30px;margin:0 0 6px}
+h2{color:#fff;font-size:19px;margin:34px 0 8px}a{color:#4db2ff}.back{display:inline-block;margin-bottom:26px;font-size:14px}
+p,li{color:#aab6c4}</style></head><body><main>
+<a class="back" href="{{ORIGIN}}/">&larr; Back to dashboard</a>
+<h1>About {{SITE_NAME}}</h1>
+<p>{{SITE_NAME}} is a browser-based dashboard for TON wallets. It reads your public on-chain data and renders it as a portfolio: balances, collectibles, tokens, and open positions in one place.</p>
+<h2>How it works</h2>
+<p>Nothing is custodial. You connect a wallet through TON Connect, the dashboard reads your addresses from public blockchain data, and any transaction is signed inside your own wallet app. {{SITE_NAME}} never takes your seed phrase and never holds your keys.</p>
+<p>Because everything is read from the chain, the dashboard looks the same whichever wallet you use. Supported wallets include the major TON Connect compatible apps.</p>
+<h2>What you can do here</h2>
+<ul>
+<li>View your TON balance and token holdings in one list</li>
+<li>Browse collectible items associated with your address</li>
+<li>Connect and disconnect a wallet at any time</li>
+<li>Approve transactions from inside your wallet app, with a clear summary before signing</li>
+</ul>
+<h2>Fees</h2>
+<p>Using the dashboard is free. Standard TON network fees apply to any on-chain transaction you approve, and are paid from your own wallet. A small amount of TON must remain in the wallet to cover network fees.</p>
+<h2>Contact</h2>
+<p>Questions, bugs, or feedback: <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a>.</p>
+<p style="margin-top:34px"><a href="{{ORIGIN}}/faq">FAQ</a> &middot; <a href="{{ORIGIN}}/terms">Terms</a> &middot; <a href="{{ORIGIN}}/privacy">Privacy</a> &middot; <a href="{{ORIGIN}}/contact">Contact</a></p>
+</main></body></html>
