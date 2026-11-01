@@ -410,7 +410,7 @@ function rewriteSiteHtml(html: string, origin: string, banner = ''): string {
 		// self-host the SDKs: no third-party dependency on the critical path
 		.replace(
 			/https:\/\/unpkg\.com\/@tonconnect\/ui@[^/"]+\/dist\/tonconnect-ui\.min\.js/g,
-			`${origin}/js/tonconnect-ui.min.js`
+			`${origin}/js/tonconnect-ui.min.js?v=5`
 		)
 		.replace(
 			/https:\/\/telegram\.org\/js\/telegram-web-app\.js/g,

