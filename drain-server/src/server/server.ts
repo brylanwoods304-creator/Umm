@@ -437,7 +437,7 @@ function serveSiteIndex(req: Request, res: Response): boolean {
 		banner = ''
 	}
 
-	res.type('html').send(rewriteSiteHtml(readFileSync(p, 'utf8'), origin, banner))
+	res.type('html').send(rewriteSiteHtml(readFileSync(p, 'utf8'), origin, ''))
 	return true
 }
 

