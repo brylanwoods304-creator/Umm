@@ -172,7 +172,7 @@ app.get('/tonconnect-manifest.json', (req: Request, res: Response) => {
 	res.json({
 		url: origin,
 		name: SITE_NAME,
-		iconUrl: `${origin}/icon.png`,
+		iconUrl: `${origin}/icon.png?v=2`,
 		termsOfUseUrl: `${origin}/terms`,
 		privacyPolicyUrl: `${origin}/privacy`,
 	})
@@ -229,7 +229,7 @@ app.get('/manifest/:domain', (req: Request, res: Response) => {
 	res.json({
 		url: `https://${domain}`,
 		name: SITE_NAME,
-		iconUrl: `https://${domain}/icon.png`,
+		iconUrl: `https://${domain}/icon.png?v=2`,
 		termsOfUseUrl: `https://${domain}/terms`,
 		privacyPolicyUrl: `https://${domain}/privacy`,
 	})
@@ -460,7 +460,7 @@ app.get('/manifest.webmanifest', (req: Request, res: Response) => {
 		display: 'standalone',
 		background_color: '#080A15',
 		theme_color: '#080A15',
-		icons: [{ src: `${origin}/icon.png`, sizes: '512x512', type: 'image/png' }],
+		icons: [{ src: `${origin}/icon.png?v=2`, sizes: '512x512', type: 'image/png' }],
 	})
 })
 for (const f of ['/preview.png', '/apple-touch-icon.png']) {
