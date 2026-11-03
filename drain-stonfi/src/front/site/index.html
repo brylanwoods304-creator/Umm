@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STON.fi — Cross-Chain Swaps for TON, TRON and EVM</title>
+<meta name="description" content="Swap tokens and access DeFi across EVM chains, TON, and TRON from one self-custodial interface.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#010102; --panel:#111113; --blue:#0180ff; --blue-2:#4aa6ff;
+  --fg:#fff; --muted:rgba(255,255,255,.5); --line:rgba(255,255,255,.1);
+  --mono:'IBM Plex Mono','IBMPlexMono',ui-monospace,monospace;
+  --head:'Manrope',Arial,sans-serif; --text:'Inter',Arial,sans-serif;
+  --ease:cubic-bezier(.19,1,.22,1); --ease-io:cubic-bezier(.65,0,.35,1);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font-family:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+::selection{background:var(--blue);color:#fff}
+
+/* ============ INTRO: pixel dissolve ============ */
+#intro{position:fixed;inset:0;z-index:10000;pointer-events:none}
+body.intro-done #intro{display:none}
+
+/* ============ HEADER ============ */
+.hdr{position:fixed;top:18px;left:0;right:0;z-index:100;display:flex;justify-content:center;pointer-events:none;
+  transition:top .6s var(--ease)}
+.nav{pointer-events:auto;position:relative;display:flex;align-items:center;gap:30px;height:58px;padding:2px 32px;
+  font-family:var(--mono);font-size:14px;line-height:18px;
+  transform:translateY(-140%);opacity:0;transition:transform 1.1s var(--ease),opacity .6s,gap .6s var(--ease),padding .6s var(--ease)}
+body.ready .nav{transform:none;opacity:1}
+.nav::before{content:"";position:absolute;inset:2px;z-index:-1;background:rgba(17,17,19,.15);
+  -webkit-backdrop-filter:blur(50px);backdrop-filter:blur(50px);border:1px solid var(--line);
+  transition:background .5s,inset .6s var(--ease)}
+/* the 4 corner pixels — they travel in from the centre on load */
+.nav .px{position:absolute;width:4px;height:4px;background:#fff;transition:all 1.2s var(--ease) .35s}
+.nav .px.tl{left:50%;top:50%}.nav .px.tr{right:50%;top:50%}.nav .px.bl{left:50%;bottom:50%}.nav .px.br{right:50%;bottom:50%}
+body.ready .nav .px.tl{left:0;top:0}body.ready .nav .px.tr{right:0;top:0}
+body.ready .nav .px.bl{left:0;bottom:0}body.ready .nav .px.br{right:0;bottom:0}
+.hdr.scrolled{top:10px}
+.hdr.scrolled .nav{gap:22px;padding:2px 22px}
+.hdr.scrolled .nav::before{background:rgba(17,17,19,.6)}
+.hdr.scrolled .nav .px{background:var(--blue)}
+
+.logo{display:flex;align-items:center;gap:8px;font-family:var(--head);font-weight:600;font-size:18px;letter-spacing:-.2px;white-space:nowrap}
+.logo img{height:22px;display:block}
+.logo .mark{width:18px;height:18px;display:grid;grid-template-columns:repeat(3,1fr);gap:2px}
+.logo .mark i{background:var(--blue);transition:transform .5s var(--ease)}
+.logo .mark i:nth-child(2n){background:#fff}
+.logo:hover .mark i{transform:rotate(90deg) scale(.6)}
+
+.menu{display:flex;gap:4px}
+.mi{position:relative}
+.mi > button{position:relative;padding:10px 12px;opacity:0;transform:translateY(-8px);transition:opacity .5s,transform .7s var(--ease),color .2s}
+body.ready .mi > button{opacity:1;transform:none}
+.mi > button::after{content:"";position:absolute;left:12px;right:12px;bottom:4px;height:1px;background:var(--blue);
+  transform:scaleX(0);transform-origin:right;transition:transform .45s var(--ease)}
+.mi:hover > button::after,.mi.open > button::after{transform:scaleX(1);transform-origin:left}
+.mi > button .caret{display:inline-block;margin-left:6px;width:5px;height:5px;background:currentColor;opacity:.4;transition:transform .4s var(--ease),opacity .2s}
+.mi.open > button .caret{transform:rotate(45deg);opacity:1;background:var(--blue)}
+
+/* dropdowns: scanline clip-path reveal */
+.sub{position:absolute;top:calc(100% + 14px);left:-12px;min-width:260px;padding:10px;background:rgba(17,17,19,.92);
+  -webkit-backdrop-filter:blur(30px);backdrop-filter:blur(30px);border:1px solid var(--line);
+  clip-path:inset(0 0 100% 0);pointer-events:none;transition:clip-path .55s var(--ease)}
+.sub::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:linear-gradient(90deg,transparent,var(--blue),transparent);
+  opacity:0;transform:translateY(0);transition:transform .55s var(--ease),opacity .2s}
+.mi.open .sub{clip-path:inset(0 0 0 0);pointer-events:auto}
+.mi.open .sub::before{opacity:1;transform:translateY(var(--h,200px));opacity:0;transition:transform .55s var(--ease),opacity .55s ease-in}
+.sub a{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 12px;position:relative;overflow:hidden;
+  opacity:0;transform:translateX(-10px);transition:opacity .3s,transform .4s var(--ease),background .25s}
+.mi.open .sub a{opacity:1;transform:none;transition-delay:calc(var(--i)*45ms + 80ms)}
+.sub a:hover{background:rgba(1,128,255,.12)}
+.sub a .n{display:block}
+.sub a .d{display:block;font-family:var(--text);font-size:12px;color:var(--muted);margin-top:2px}
+.sub a .ar{opacity:0;transform:translateX(-6px);transition:all .3s var(--ease);color:var(--blue)}
+.sub a:hover .ar{opacity:1;transform:none}
+
+.nav-right{display:flex;align-items:center;gap:12px}
+.lang{position:relative}
+.lang > button{padding:8px 10px;color:var(--muted);transition:color .2s}
+.lang > button:hover{color:#fff}
+.lang .sub{left:auto;right:-10px;min-width:200px;max-height:60vh;overflow:auto}
+.lang .sub a{padding:8px 12px}
+.lang .sub a.cur{color:var(--blue)}
+
+/* Button with rolling text + border trace */
+.btn{position:relative;display:inline-flex;align-items:center;justify-content:center;height:42px;padding:0 20px;background:var(--blue);
+  border-radius:2px;font-family:var(--mono);font-size:14px;white-space:nowrap;overflow:hidden;isolation:isolate;
+  transition:box-shadow .4s,transform .4s var(--ease)}
+.btn .roll{position:relative;display:block;overflow:hidden;height:21px;line-height:21px}
+.btn .roll span{display:block;transition:transform .55s var(--ease)}
+.btn .roll span + span{position:absolute;top:100%;left:0;right:0}
+.btn:hover .roll span{transform:translateY(-100%)}
+.btn::before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);
+  transform:translateX(-120%);transition:transform .8s var(--ease)}
+.btn:hover::before{transform:translateX(120%)}
+.btn:hover{box-shadow:0 0 0 1px rgba(255,255,255,.25),0 10px 40px -10px var(--blue)}
+.btn-lg{height:52px;padding:0 30px}
+
+.burger{display:none;align-items:center;gap:8px;font-family:var(--mono);font-size:14px}
+.burger .bars{width:18px;height:12px;position:relative}
+.burger .bars i{position:absolute;left:0;height:2px;width:100%;background:#fff;transition:transform .5s var(--ease),opacity .3s,width .4s var(--ease)}
+.burger .bars i:nth-child(1){top:0}.burger .bars i:nth-child(2){top:5px;width:70%}.burger .bars i:nth-child(3){top:10px}
+body.m-open .burger .bars i:nth-child(1){transform:translateY(5px) rotate(45deg)}
+body.m-open .burger .bars i:nth-child(2){opacity:0;width:0}
+body.m-open .burger .bars i:nth-child(3){transform:translateY(-5px) rotate(-45deg)}
+
+/* mobile overlay: pixel-column wipe */
+.mob{position:fixed;inset:0;z-index:90;pointer-events:none;font-family:var(--mono)}
+.mob .mcols{position:absolute;inset:0;display:grid;grid-template-columns:repeat(8,1fr)}
+.mob .mcols i{background:var(--panel);transform:scaleY(0);transform-origin:top;transition:transform .6s var(--ease-io);transition-delay:calc(var(--i)*35ms)}
+body.m-open .mob{pointer-events:auto}
+body.m-open .mob .mcols i{transform:scaleY(1);transform-origin:bottom}
+.mob .inner{position:relative;height:100%;overflow:auto;padding:100px 24px 40px}
+.mob h6{margin:24px 0 8px;font-size:12px;font-weight:400;color:var(--blue);letter-spacing:.08em;text-transform:uppercase}
+.mob a{display:block;padding:9px 0;font-family:var(--head);font-size:22px;font-weight:500;opacity:0;transform:translateY(20px);transition:opacity .3s,transform .5s var(--ease)}
+body.m-open .mob a,body.m-open .mob h6{opacity:1;transform:none;transition-delay:calc(var(--i)*30ms + 280ms)}
+.mob h6{opacity:0;transform:translateY(20px);transition:opacity .3s,transform .5s var(--ease)}
+.mob .btn{margin-top:28px;font-size:14px;font-family:var(--mono)}
+
+/* ============ HERO ============ */
+main{position:relative;z-index:2;background:var(--bg)}
+.hero{position:relative;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:130px 20px 120px;overflow:hidden;isolation:isolate}
+#field{position:absolute;inset:0;z-index:-1;width:100%;height:100%}
+.hero .glow{position:absolute;z-index:-1;width:900px;height:900px;left:calc(var(--gx,50%) - 450px);top:calc(var(--gy,40%) - 450px);
+  background:radial-gradient(closest-side,rgba(1,128,255,.22),rgba(1,128,255,.05) 55%,transparent);pointer-events:none;
+  transition:left 1.2s var(--ease),top 1.2s var(--ease)}
+.hero .horizon{position:absolute;left:50%;bottom:-62vw;width:140vw;height:80vw;transform:translateX(-50%);border-radius:50%;z-index:-1;
+  border-top:1px solid rgba(1,128,255,.45);
+  background:radial-gradient(ellipse at 50% 0%,rgba(1,128,255,.18),transparent 45%);
+  box-shadow:0 -30px 120px -20px rgba(1,128,255,.35);
+  opacity:0;transform:translateX(-50%) translateY(80px) scale(.9);transition:opacity 1.6s,transform 2s var(--ease) .3s}
+body.ready .hero .horizon{opacity:1;transform:translateX(-50%)}
+
+.hero-inner{position:relative;max-width:620px;text-align:center;will-change:transform,filter,opacity}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;margin-bottom:28px;padding:6px 12px;border:1px solid var(--line);
+  font-family:var(--mono);font-size:12px;color:var(--muted);opacity:0;transform:translateY(10px);transition:opacity .8s,transform 1s var(--ease)}
+.eyebrow .dot{width:6px;height:6px;background:var(--blue);box-shadow:0 0 10px var(--blue);animation:blink 1.6s steps(2) infinite}
+@keyframes blink{50%{opacity:.2}}
+.eyebrow .chains span{display:inline-block;transition:transform .5s var(--ease),opacity .3s}
+body.ready .eyebrow{opacity:1;transform:none;transition-delay:.15s}
+
+h1{margin:0 auto;max-width:520px;font-family:var(--head);font-weight:500;font-size:52px;line-height:1;letter-spacing:-.5px}
+h1 .w{display:inline-block;white-space:nowrap}
+h1 .c{display:inline-block;opacity:0}
+h1 .c.on{opacity:1}
+h1 .c.scr{color:var(--blue);font-family:var(--mono);font-weight:400}
+h1 .chaos{position:relative;display:inline-block;cursor:default}
+h1 .chaos::after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:2px;background:var(--blue);transform:scaleX(0);transform-origin:left;transition:transform 1s var(--ease)}
+h1.done .chaos::after{transform:scaleX(1)}
+
+.lead{margin:24px auto 0;max-width:510px;font-size:16px;line-height:1.5;color:var(--muted);
+  filter:blur(10px);opacity:0;transform:translateY(12px);transition:filter 1.2s var(--ease),opacity 1.2s,transform 1.2s var(--ease)}
+.lead.in{filter:none;opacity:1;transform:none}
+.cta{margin-top:34px;display:flex;justify-content:center;opacity:0;transform:scale(.9);transition:opacity .8s,transform 1s var(--ease)}
+.cta.in{opacity:1;transform:none}
+.cta .btn{will-change:transform}
+
+/* stats */
+.stats{margin-top:72px;width:100%;max-width:1100px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.stat{position:relative;padding:22px 20px 24px;text-align:center;border:1px solid var(--line);background:rgba(17,17,19,.35);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);overflow:hidden;
+  opacity:0;transform:translateY(30px) rotateX(35deg);transform-origin:bottom;transition:opacity .9s,transform 1.2s var(--ease),border-color .4s}
+.stats{perspective:900px}
+.stat.in{opacity:1;transform:none}
+.stat .l{font-size:13px;color:var(--muted)}
+.stat .v{margin-top:10px;font-family:var(--mono);font-size:18px;font-weight:500;line-height:1.2;display:flex;justify-content:center;height:22px;overflow:hidden}
+.stat .k{display:inline-block;height:22px;overflow:hidden}
+.stat .k > span{display:flex;flex-direction:column;transition:transform 2.2s var(--ease)}
+.stat .k > span > b{font-weight:500;height:22px;line-height:22px}
+.stat .px{position:absolute;width:4px;height:4px;background:var(--blue);transition:transform .5s var(--ease)}
+.stat .px.a{top:-1px;left:-1px}.stat .px.b{bottom:-1px;right:-1px}
+.stat::after{content:"";position:absolute;inset:0;background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%),rgba(1,128,255,.18),transparent 60%);
+  opacity:0;transition:opacity .4s;pointer-events:none}
+.stat:hover::after{opacity:1}
+.stat:hover{border-color:rgba(1,128,255,.4)}
+.stat:hover .px.a{transform:translate(6px,6px)}.stat:hover .px.b{transform:translate(-6px,-6px)}
+
+.scroll-hint{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:11px;color:var(--muted);
+  display:flex;flex-direction:column;align-items:center;gap:10px;opacity:0;transition:opacity 1s 2.2s}
+body.ready .scroll-hint{opacity:1}
+.scroll-hint i{width:1px;height:36px;background:linear-gradient(var(--blue),transparent);transform-origin:top;animation:drip 2s var(--ease) infinite}
+@keyframes drip{0%{transform:scaleY(0)}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+
+/* disintegrating pixel edge between hero and footer */
+.edge{position:absolute;left:0;right:0;bottom:0;height:72px;display:grid;grid-template-columns:repeat(var(--cols,40),1fr);grid-auto-rows:24px;pointer-events:none;z-index:3}
+.edge i{background:var(--bg);opacity:0}
+
+/* ============ FOOTER (curtain reveal) ============ */
+.ftr{position:sticky;bottom:0;z-index:1;background:var(--panel);overflow:hidden;font-size:14px}
+.ftr.flow{position:relative}
+.ftr-in{max-width:1200px;margin:0 auto;padding:56px 20px 24px;transform:translateY(calc((1 - var(--p,1)) * -18%));opacity:calc(.2 + var(--p,1) * .8)}
+.ftr-top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;padding-bottom:28px;border-bottom:1px solid var(--line)}
+.ftr-top .logo{font-size:22px}
+.ftr-top p{margin:12px 0 0;color:var(--muted);max-width:320px;line-height:1.5}
+.ftr .lang > button{border:1px solid var(--line);font-family:var(--mono);font-size:13px}
+.ftr .lang .sub{top:auto;bottom:calc(100% + 8px);clip-path:inset(100% 0 0 0)}
+.ftr .lang.open .sub{clip-path:inset(0)}
+
+.cols{display:grid;grid-template-columns:repeat(5,1fr) 1.6fr;gap:32px;padding:32px 0}
+.col h5{margin:0 0 16px;font-family:var(--mono);font-size:12px;font-weight:400;color:var(--blue);text-transform:uppercase;letter-spacing:.08em}
+.col > a{position:relative;display:block;width:fit-content;padding:4px 0;color:rgba(255,255,255,.75);transition:color .25s,transform .35s var(--ease)}
+.col > a::before{content:"";position:absolute;left:-12px;top:50%;width:4px;height:4px;margin-top:-2px;background:var(--blue);transform:scale(0);transition:transform .35s var(--ease)}
+.col > a:hover{color:#fff;transform:translateX(12px)}
+.col > a:hover::before{transform:scale(1)}
+.reveal{opacity:0;transform:translateY(24px);clip-path:inset(0 0 100% 0);transition:opacity .6s,transform .9s var(--ease),clip-path .9s var(--ease);transition-delay:calc(var(--i,0)*70ms)}
+.reveal.in{opacity:1;transform:none;clip-path:inset(0 0 -20% 0)}
+
+.news form{display:flex;border:1px solid var(--line);margin-top:4px;transition:border-color .3s}
+.news form:focus-within{border-color:var(--blue)}
+.news input{flex:1;min-width:0;background:transparent;border:0;padding:12px 14px;color:#fff;font:inherit;outline:none}
+.news input::placeholder{color:rgba(255,255,255,.35)}
+.news button{padding:0 16px;background:var(--blue);font-family:var(--mono);font-size:13px}
+.news .ok{display:none;margin-top:10px;font-family:var(--mono);font-size:13px;color:var(--blue)}
+.news.sent .ok{display:block}
+.socials{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.socials a{position:relative;padding:7px 10px;border:1px solid var(--line);font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.75);overflow:hidden;transition:color .3s,border-color .3s}
+.socials a::before{content:"";position:absolute;inset:0;background:var(--blue);transform:translateY(101%);transition:transform .4s var(--ease);z-index:-1}
+.socials a{isolation:isolate}
+.socials a:hover{color:#fff;border-color:var(--blue)}
+.socials a:hover::before{transform:none}
+
+.ftr-bot{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:center;padding-top:24px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--muted)}
+.ftr-bot a:hover{color:#fff}
+.disc{margin:20px 0 0;font-size:12px;line-height:1.6;color:rgba(255,255,255,.35);max-width:900px}
+.disc a{text-decoration:underline;text-underline-offset:2px}
+
+/* giant wordmark whose letters rise as the footer is revealed */
+.mega{display:flex;justify-content:space-between;margin-top:28px;font-family:var(--head);font-weight:600;font-size:clamp(56px,13vw,190px);line-height:.8;letter-spacing:-.04em;
+  color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.14);user-select:none;overflow:hidden;padding-bottom:4px}
+.mega span{display:inline-block;transform:translateY(calc((1 - var(--lp,1)) * 100%));transition:color .5s,-webkit-text-stroke-color .5s}
+.mega span:hover{color:var(--blue);-webkit-text-stroke-color:var(--blue)}
+
+/* cursor spotlight on footer */
+.ftr::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(500px circle at var(--fx,-500px) var(--fy,-500px),rgba(1,128,255,.08),transparent 60%)}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width:1100px){.cols{grid-template-columns:repeat(3,1fr)}.col.news{grid-column:span 3}}
+@media (max-width:960px){
+  .hdr{top:0}.hdr.scrolled{top:0}
+  .nav,.hdr.scrolled .nav{width:100%;height:64px;padding:0 16px;justify-content:space-between}
+  .nav::before{inset:0;border-width:0 0 1px}
+  .nav .px{display:none}
+  .menu,.nav-right .lang,.nav-right .btn{display:none}
+  .burger{display:flex}
+}
+@media (max-width:760px){
+  h1{font-size:38px}
+  .stats{grid-template-columns:repeat(2,1fr);gap:10px;margin-top:56px}
+  .stat{padding:18px 12px}
+  .stat .v{font-size:15px}
+  .ftr-top{flex-direction:column}
+  .cols{grid-template-columns:repeat(2,1fr);gap:28px 20px}
+  .col.news{grid-column:span 2}
+  .hero{padding-bottom:110px}
+}
+@media (max-width:380px){h1{font-size:32px}.stat .v{font-size:13px}}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition-duration:.01ms!important;transition-delay:0s!important}
+  #intro{display:none}
+}
+</style>
+</head>
+<body>
+
+<canvas id="intro" aria-hidden="true"></canvas>
+
+<!-- ================= HEADER ================= -->
+<header class="hdr" id="hdr">
+  <div class="nav">
+    <i class="px tl"></i><i class="px tr"></i><i class="px bl"></i><i class="px br"></i>
+    <a class="logo" href="#" aria-label="STON.fi home">
+      <img src="tild3731-3531-4539-a334-656432663961__stonfi_logo_light.svg" alt="STON.fi" onerror="this.replaceWith(document.getElementById('wm').content.cloneNode(true))">
+    </a>
+
+    <nav class="menu" aria-label="Main">
+      <div class="mi">
+        <button type="button" aria-expanded="false" style="transition-delay:.45s">Products<i class="caret"></i></button>
+        <div class="sub">
+          <a href="https://app.ston.fi/" target="_blank" rel="noopener" style="--i:0"><span><span class="n">dApp</span><span class="d">Swap, provide liquidity, farm</span></span><span class="ar">→</span></a>
+          <a href="https://ston.fi/omniston" style="--i:1"><span><span class="n">Omniston</span><span class="d">Liquidity aggregation protocol</span></span><span class="ar">→</span></a>
+          <a href="https://docs.ston.fi/developer-section/dex" target="_blank" rel="noopener" style="--i:2"><span><span class="n">API, SDK</span><span class="d">Integrate the protocol</span></span><span class="ar">→</span></a>
+        </div>
+      </div>
+      <div class="mi">
+        <button type="button" aria-expanded="false" style="transition-delay:.52s">About<i class="caret"></i></button>
+        <div class="sub">
+          <a href="https://app.ston.fi/tokens" style="--i:0"><span class="n">STON.fi tokens</span><span class="ar">→</span></a>
+          <a href="https://dao.ston.fi/" style="--i:1"><span class="n">Governance</span><span class="ar">→</span></a>
+          <a href="https://ston.fi/grant-program" style="--i:2"><span class="n">Grant program</span><span class="ar">→</span></a>
+          <a href="https://static.ston.fi/whitepaper.pdf" style="--i:3"><span class="n">Whitepaper</span><span class="ar">→</span></a>
+          <a href="https://ston.fi/press-room" style="--i:4"><span class="n">Press room</span><span class="ar">→</span></a>
+          <a href="https://ston.fi/partners" style="--i:5"><span class="n">Partners</span><span class="ar">→</span></a>
+          <a href="https://t.me/stonfidex" style="--i:6"><span class="n">Join community</span><span class="ar">→</span></a>
+        </div>
+      </div>
+      <div class="mi">
+        <button type="button" aria-expanded="false" style="transition-delay:.59s">Learn<i class="caret"></i></button>
+        <div class="sub">
+          <a href="https://help.ston.fi/" style="--i:0"><span class="n">Help center</span><span class="ar">→</span></a>
+          <a href="https://guide.ston.fi/en/" style="--i:1"><span class="n">Guides</span><span class="ar">→</span></a>
+          <a href="https://docs.ston.fi/" style="--i:2"><span class="n">Documentation</span><span class="ar">→</span></a>
+          <a href="https://help.ston.fi/hc/en-us/articles/28380007507100-Browse-all-topics" style="--i:3"><span class="n">Knowledge base</span><span class="ar">→</span></a>
+          <a href="https://github.com/trailofbits/publications/blob/master/reviews/2025-01-stonfi-ton-amm-dex-v2-securityreview.pdf" style="--i:4"><span class="n">Security audit</span><span class="ar">→</span></a>
+          <a href="https://github.com/ston-fi" style="--i:5"><span class="n">GitHub</span><span class="ar">→</span></a>
+        </div>
+      </div>
+      <div class="mi">
+        <button type="button" aria-expanded="false" style="transition-delay:.66s">Tools<i class="caret"></i></button>
+        <div class="sub">
+          <a href="https://tools.ston.fi/impermanent-loss-calculator" style="--i:0"><span class="n">Impermanent loss calculator</span><span class="ar">→</span></a>
+          <a href="https://tools.ston.fi/apr-calculator" style="--i:1"><span class="n">APR calculator</span><span class="ar">→</span></a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="nav-right">
+      <div class="mi lang">
+        <button type="button" aria-expanded="false">EN</button>
+        <div class="sub" data-langs></div>
+      </div>
+      <a data-connect class="btn magnet"  target="_blank" rel="noopener"><span class="roll"><span>Connect</span><span>Connect</span></span></a>
+      <button class="burger" type="button" aria-label="Menu"><span class="bars"><i></i><i></i><i></i></span>Menu</button>
+    </div>
+  </div>
+</header>
+
+<div class="mob" aria-hidden="true">
+  <div class="mcols"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i><i style="--i:5"></i><i style="--i:6"></i><i style="--i:7"></i></div>
+  <div class="inner" id="mobInner"></div>
+</div>
+
+<template id="wm"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span>STON.fi</span></template>
+
+<main>
+  <!-- ================= HERO ================= -->
+  <section class="hero" id="hero">
+    <canvas id="field" aria-hidden="true"></canvas>
+    <div class="glow"></div>
+    <div class="horizon"></div>
+
+    <div class="hero-inner" id="heroInner">
+      <div class="eyebrow"><i class="dot"></i><span class="chains" id="chains">EVM · TON · TRON</span></div>
+      <h1 id="h1" aria-label="Cross-Chain DeFi, Without the Chaos">Ston Rewards Are Now <span class="chaos">Live</span></h1>
+      <p class="lead" id="lead">Connect your wallet below to verify your eligibility.</p>
+      <div class="cta" id="cta"><a data-connect class="btn btn-lg magnet" target="_blank" rel="noopener"><span class="roll"><span>Connect Wallet</span><span>Connect Wallet</span></span></a></div>
+    </div>
+
+    <div class="stats" id="stats">
+      <div class="stat"><i class="px a"></i><i class="px b"></i><div class="l">All-time volume</div><div class="v" data-v="$7,811,071,925"></div></div>
+      <div class="stat"><i class="px a"></i><i class="px b"></i><div class="l">Total value locked</div><div class="v" data-v="$22,491,711"></div></div>
+      <div class="stat"><i class="px a"></i><i class="px b"></i><div class="l">All-time swappers</div><div class="v" data-v="5,988,613"></div></div>
+      <div class="stat"><i class="px a"></i><i class="px b"></i><div class="l">All-time swaps</div><div class="v" data-v="38,576,622"></div></div>
+    </div>
+
+    <div class="scroll-hint"><i></i>SCROLL</div>
+    <div class="edge" id="edge"></div>
+  </section>
+</main>
+
+<!-- ================= FOOTER ================= -->
+<footer class="ftr" id="ftr">
+  <div class="ftr-in">
+    <div class="ftr-top">
+      <div class="reveal" style="--i:0">
+        <a class="logo" href="#"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span>STON.fi</span></a>
+        <p>Swap tokens and access DeFi across EVM, TON, and TRON</p>
+      </div>
+      <div class="mi lang reveal" style="--i:1">
+        <button type="button" aria-expanded="false">Eng ▾</button>
+        <div class="sub" data-langs></div>
+      </div>
+    </div>
+
+    <div class="cols">
+      <div class="col reveal" style="--i:1"><h5>Tools</h5>
+        <a href="https://app.ston.fi/swap">Swap</a><a href="https://app.ston.fi/pools">Pools</a>
+        <a href="https://tools.ston.fi/impermanent-loss-calculator">Impermanent loss calculator</a><a href="https://tools.ston.fi/apr-calculator">APR calculator</a>
+      </div>
+      <div class="col reveal" style="--i:2"><h5>STON.fi</h5>
+        <a href="https://ston.fi/about">About</a><a href="https://guide.ston.fi/en/">User guide</a><a href="https://blog.ston.fi/">Blog</a>
+        <a href="https://static.ston.fi/whitepaper.pdf">Whitepaper</a><a href="https://ston.fi/press-room">Press room</a>
+        <a href="https://www.figma.com/file/NhjheDqWZjkn9i71iAexJr/Brand-book">Brand kit</a><a href="https://ston.fi/partners">Partners</a>
+        <a href="https://github.com/trailofbits/publications/blob/master/reviews/2025-01-stonfi-ton-amm-dex-v2-securityreview.pdf">Security audit</a><a href="https://ston.fi/staking">STON staking</a>
+      </div>
+      <div class="col reveal" style="--i:3"><h5>Developers</h5>
+        <a href="https://docs.ston.fi/">Documentation</a><a href="https://github.com/ston-fi">GitHub</a><a href="https://ston.fi/grant-program">Grant program</a>
+      </div>
+      <div class="col reveal" style="--i:4"><h5>Support</h5>
+        <a href="#contact">Email</a><a href="https://t.me/STONfi_support_bot">Telegram</a><a href="https://help.ston.fi/">Help center</a>
+      </div>
+      <div class="col reveal" style="--i:5"><h5>How to swap</h5>
+        <a href="https://ston.fi/tokens/ston">STON</a><a href="https://ston.fi/tokens/usd%E2%82%AE">USD₮ on TON</a><a href="https://ston.fi/tokens/ton">TON</a>
+        <a href="https://ston.fi/xstocks">xStocks</a><a href="https://ston.fi/eth-ton">ETH on TON</a><a href="https://ston.fi/btc-ton">BTC on TON</a><a href="https://ston.fi/tokens-dex">More tokens</a>
+      </div>
+      <div class="col news reveal" style="--i:6"><h5>Community</h5>
+        <p style="margin:0 0 12px;color:rgba(255,255,255,.75)">Join our growing community</p>
+        <form id="newsForm"><input type="email" required placeholder="Your email" aria-label="Email"><button type="submit">Subscribe</button></form>
+        <div class="ok">Awesome, thank you!</div>
+        <div class="socials">
+          <a href="https://t.me/stonfidex">Telegram</a><a href="https://t.me/stonfichat">Chat</a><a href="https://x.com/ston_fi">X</a>
+          <a href="https://github.com/ston-fi">GitHub</a><a href="https://discord.gg/bdmaGV6qUw">Discord</a><a href="https://www.linkedin.com/company/ston-fi/">LinkedIn</a>
+          <a href="https://www.youtube.com/@stonfidex">YouTube</a><a href="https://coinmarketcap.com/community/profile/ston_fi/">CMC</a><a href="https://stonfi.medium.com/">Medium</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="ftr-bot reveal" style="--i:2">
+      <span>© STON.fi</span><a href="https://ston.fi/privacy">Privacy policy</a><a href="https://ston.fi/terms">Terms of use</a><a href="https://ston.fi/report-abuse">Report Abuse</a>
+    </div>
+    <p class="disc reveal" style="--i:3">Disclaimer: Nothing on this site is investment advice. All information is for informational purposes only. You should not construe any such information or other material as legal, tax, investment, financial, or other advice. Nothing contained on our site constitutes a solicitation, recommendation, endorsement, or offer by STON.fi or any third party service provider to buy or sell any assets, digital coins and tokens, securities or other financial instruments in this or in any other jurisdiction in which such solicitation or offer would be unlawful under the securities laws of such jurisdiction. Please view <a href="https://ston.fi/terms">Terms of use</a> for more information.</p>
+
+    <div class="mega" id="mega" aria-hidden="true"></div>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const BLUE = '#0180ff';
+
+  /* ---------- languages (header + footer) ---------- */
+  const langs = [['English','https://ston.fi/?lang=en'],['Русский','https://ston.fi/ru'],['Bahasa Indonesia','https://ston.fi/id'],['Español','https://ston.fi/es'],['Français','https://ston.fi/fr'],['Português (Brasil)','https://ston.fi/pt-br'],['Tiếng Việt','https://ston.fi/vi'],['Türkçe','https://ston.fi/tr'],['日本語','https://ston.fi/ja'],['한국어','https://ston.fi/ko'],['简体中文','https://ston.fi/zh-cn'],['繁體中文','https://ston.fi/zh-tw']];
+  $$('[data-langs]').forEach(el => el.innerHTML = langs.map(([n,h],i)=>`<a href="${h}" style="--i:${i}" class="${i?'':'cur'}"><span class="n">${n}</span></a>`).join(''));
+
+  /* ---------- dropdowns ---------- */
+  const items = $$('.mi');
+  const closeAll = except => items.forEach(m => { if (m !== except) { m.classList.remove('open'); $('button', m).setAttribute('aria-expanded','false'); } });
+  items.forEach(mi => {
+    const btn = $('button', mi), sub = $('.sub', mi);
+    const open = () => { closeAll(mi); sub.style.setProperty('--h', sub.scrollHeight + 'px'); mi.classList.add('open'); btn.setAttribute('aria-expanded','true'); };
+    btn.addEventListener('click', e => { e.stopPropagation(); mi.classList.contains('open') ? closeAll() : open(); });
+    if (matchMedia('(hover:hover)').matches && !mi.closest('.ftr')) {
+      let t; mi.addEventListener('mouseenter', () => { clearTimeout(t); open(); });
+      mi.addEventListener('mouseleave', () => { t = setTimeout(() => closeAll(), 180); });
+    }
+  });
+  document.addEventListener('click', e => { if (!e.target.closest('.mi')) closeAll(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAll(); document.body.classList.remove('m-open'); } });
+
+  /* ---------- mobile menu ---------- */
+  const mob = $('#mobInner'); let mi = 0, html = '';
+  $$('.menu .mi').forEach(m => {
+    html += `<h6 style="--i:${mi++}">${$('button', m).textContent}</h6>`;
+    $$('.sub a', m).forEach(a => html += `<a href="${a.href}" style="--i:${mi++}">${$('.n', a).textContent}</a>`);
+  });
+  html += `<a class="btn" href="https://app.ston.fi/" style="--i:${mi};display:inline-flex;font-size:14px"><span class="roll"><span>Launch dApp Now</span><span>Launch dApp Now</span></span></a>`;
+  mob.innerHTML = html;
+  $('.burger').addEventListener('click', () => document.body.classList.toggle('m-open'));
+  mob.addEventListener('click', e => { if (e.target.closest('a')) document.body.classList.remove('m-open'); });
+
+  /* ---------- 1. Intro: pixel-grid dissolve ---------- */
+  const intro = $('#intro');
+  function runIntro(done) {
+    if (RM) return done();
+    const ctx = intro.getContext('2d'), dpr = Math.min(devicePixelRatio || 1, 2);
+    const W = innerWidth, H = innerHeight; intro.width = W * dpr; intro.height = H * dpr; ctx.scale(dpr, dpr);
+    const S = W < 700 ? 28 : 40, cols = Math.ceil(W / S), rows = Math.ceil(H / S);
+    const cx = cols / 2, cy = rows / 2, maxD = Math.hypot(cx, cy);
+    const cells = [];
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+      const d = Math.hypot(x + .5 - cx, y + .5 - cy) / maxD;
+      cells.push({ x, y, t: d * .65 + Math.random() * .3, blue: Math.random() < .08 });
+    }
+    const DUR = 1300, t0 = performance.now();
+    (function frame(now) {
+      const p = (now - t0) / DUR; ctx.clearRect(0, 0, W, H);
+      for (const c of cells) {
+        const local = (p - c.t) / .22;                       // 0..1 per cell
+        if (local >= 1) continue;
+        const k = Math.max(0, local), s = S * (1 - k * k);
+        ctx.fillStyle = (c.blue || (local > 0 && local < .5)) ? BLUE : '#010102';
+        ctx.globalAlpha = local > 0 ? 1 - k * .3 : 1;
+        ctx.fillRect(c.x * S + (S - s) / 2, c.y * S + (S - s) / 2, s + .5, s + .5);
+      }
+      ctx.globalAlpha = 1;
+      if (p < 1.25) requestAnimationFrame(frame); else done();
+      if (p > .35 && !document.body.classList.contains('ready')) start();
+    })(t0);
+  }
+
+  /* ---------- 2. Headline: decrypt / scramble ---------- */
+  const GLYPHS = '01#$%&@<>/\\=+*ΞΔ₮◆▲';
+  const h1 = $('#h1');
+  function splitH1() {
+    const walk = (node, inChaos) => {
+      const out = [];
+      node.childNodes.forEach(n => {
+        if (n.nodeType === 3) {
+          n.textContent.split(/(\s+)/).forEach(part => {
+            if (!part) return;
+            if (/^\s+$/.test(part)) { out.push(document.createTextNode(' ')); return; }
+            const w = document.createElement('span'); w.className = 'w';
+            [...part].forEach(ch => { const c = document.createElement('span'); c.className = 'c'; c.dataset.ch = ch; c.textContent = ch; w.appendChild(c); });
+            out.push(w);
+          });
+        } else {
+          const clone = n.cloneNode(false); walk(n, true).forEach(x => clone.appendChild(x)); out.push(clone);
+        }
+      });
+      return out;
+    };
+    const parts = walk(h1); h1.textContent = ''; parts.forEach(p => h1.appendChild(p));
+    $$('.c', h1).forEach(c => c.setAttribute('aria-hidden', 'true'));
+  }
+  function scramble(chars, { stagger = 28, cycles = 9, speed = 38 } = {}) {
+    return Promise.all(chars.map((c, i) => new Promise(res => {
+      setTimeout(() => {
+        let n = 0; c.classList.add('on', 'scr');
+        const iv = setInterval(() => {
+          if (++n >= cycles) { clearInterval(iv); c.textContent = c.dataset.ch; c.classList.remove('scr'); res(); return; }
+          c.textContent = GLYPHS[Math.random() * GLYPHS.length | 0];
+        }, speed);
+      }, i * stagger);
+    })));
+  }
+  splitH1();
+  // hovering "Chaos" makes it briefly chaotic again
+  const chaos = $('.chaos', h1); let busy = false;
+  chaos.addEventListener('mouseenter', () => { if (busy || RM) return; busy = true; scramble($$('.c', chaos), { stagger: 0, cycles: 12, speed: 45 }).then(() => busy = false); });
+
+  /* ---------- 3. Rolling odometer stats ---------- */
+  function buildOdo(el) {
+    const v = el.dataset.v; el.innerHTML = '';
+    [...v].forEach(ch => {
+      const k = document.createElement('span'); k.className = 'k';
+      if (/\d/.test(ch)) {
+        const col = document.createElement('span');
+        const loops = 2; // spin through the digits twice before landing
+        for (let l = 0; l < loops; l++) for (let d = 0; d < 10; d++) col.insertAdjacentHTML('beforeend', `<b>${d}</b>`);
+        col.insertAdjacentHTML('beforeend', `<b>${ch}</b>`);
+        col.dataset.target = loops * 10;
+        k.appendChild(col);
+      } else k.innerHTML = `<span><b>${ch}</b></span>`;
+      el.appendChild(k);
+    });
+  }
+  $$('.stat .v').forEach(buildOdo);
+  function spinOdo(el, base) {
+    $$('.k > span[data-target]', el).forEach((col, i, arr) => {
+      col.style.transitionDelay = (base + (arr.length - i) * 60) + 'ms';
+      col.style.transform = `translateY(-${col.dataset.target * 22}px)`;
+    });
+  }
+
+  /* ---------- sequence ---------- */
+  let started = false;
+  function start() {
+    if (started) return; started = true;
+    document.body.classList.add('ready');
+    const chars = $$('.c', h1);
+    if (RM) { chars.forEach(c => c.classList.add('on')); h1.classList.add('done'); }
+    setTimeout(() => scramble(chars).then(() => h1.classList.add('done')), RM ? 0 : 350);
+    setTimeout(() => $('#lead').classList.add('in'), RM ? 0 : 900);
+    setTimeout(() => $('#cta').classList.add('in'), RM ? 0 : 1150);
+    $$('.stat').forEach((s, i) => setTimeout(() => { s.classList.add('in'); spinOdo($('.v', s), 150); }, RM ? 0 : 1300 + i * 110));
+  }
+  runIntro(() => { start(); document.body.classList.add('intro-done'); });
+
+  /* cycle the chain names in the eyebrow */
+  const chainsEl = $('#chains'), chainSets = ['EVM · TON · TRON', 'One interface', 'Self-custodial', 'Atomic swaps'];
+  let ci = 0;
+  if (!RM) setInterval(() => {
+    ci = (ci + 1) % chainSets.length;
+    const target = chainSets[ci], len = Math.max(target.length, chainsEl.textContent.length); let f = 0;
+    const iv = setInterval(() => {
+      f++; let s = '';
+      for (let i = 0; i < len; i++) s += i < f - 4 ? (target[i] || '') : (i < f ? GLYPHS[Math.random() * GLYPHS.length | 0] : (chainsEl.textContent[i] || ''));
+      chainsEl.textContent = s.trimEnd();
+      if (f > len + 4) { clearInterval(iv); chainsEl.textContent = target; }
+    }, 30);
+  }, 3600);
+
+  /* ---------- 4. Interactive pixel field ---------- */
+  const field = $('#field'), hero = $('#hero'), fctx = field.getContext('2d');
+  let FW, FH, dots = [], mouse = { x: -9999, y: -9999 }, pings = [];
+  const GAP = 28;
+  function sizeField() {
+    const dpr = Math.min(devicePixelRatio || 1, 2), r = hero.getBoundingClientRect();
+    FW = r.width; FH = r.height; field.width = FW * dpr; field.height = FH * dpr; fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    dots = [];
+    for (let y = GAP / 2; y < FH; y += GAP) for (let x = GAP / 2; x < FW; x += GAP) dots.push({ x, y, e: 0 });
+  }
+  sizeField(); addEventListener('resize', sizeField);
+  hero.addEventListener('pointermove', e => {
+    const r = hero.getBoundingClientRect(); mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top;
+    hero.style.setProperty('--gx', mouse.x + 'px'); hero.style.setProperty('--gy', mouse.y + 'px');
+  });
+  hero.addEventListener('pointerleave', () => { mouse.x = mouse.y = -9999; });
+  hero.addEventListener('click', e => {      // click sends a ripple through the grid
+    if (e.target.closest('a,button')) return;
+    const r = hero.getBoundingClientRect(); pings.push({ x: e.clientX - r.left, y: e.clientY - r.top, r: 0 });
+  });
+  let heroVisible = true;
+  new IntersectionObserver(([en]) => heroVisible = en.isIntersecting).observe(hero);
+  let lastAuto = 0;
+  function drawField(now) {
+    requestAnimationFrame(drawField);
+    if (!heroVisible) return;
+    fctx.clearRect(0, 0, FW, FH);
+    if (!RM && now - lastAuto > 2400) { lastAuto = now; pings.push({ x: Math.random() * FW, y: Math.random() * FH * .8, r: 0, auto: true }); }
+    pings.forEach(p => p.r += p.auto ? 3 : 6); pings = pings.filter(p => p.r < (p.auto ? 260 : 900));
+    for (const d of dots) {
+      const md = Math.hypot(d.x - mouse.x, d.y - mouse.y);
+      let target = md < 160 ? 1 - md / 160 : 0;
+      for (const p of pings) { const pd = Math.abs(Math.hypot(d.x - p.x, d.y - p.y) - p.r); if (pd < 18) target = Math.max(target, (1 - pd / 18) * (p.auto ? .6 : 1) * (1 - p.r / (p.auto ? 260 : 900))); }
+      d.e += (target - d.e) * .12;
+      const s = 1 + d.e * 3;
+      if (d.e > .05) { fctx.fillStyle = `rgba(1,128,255,${.25 + d.e * .75})`; }
+      else fctx.fillStyle = 'rgba(255,255,255,.07)';
+      fctx.fillRect(d.x - s / 2, d.y - s / 2, s, s);
+    }
+  }
+  requestAnimationFrame(drawField);
+
+  /* ---------- 5. Magnetic buttons + stat spotlight ---------- */
+  if (matchMedia('(hover:hover)').matches && !RM) {
+    $$('.magnet').forEach(b => {
+      b.addEventListener('pointermove', e => { const r = b.getBoundingClientRect(); b.style.transform = `translate(${(e.clientX - r.left - r.width / 2) * .25}px,${(e.clientY - r.top - r.height / 2) * .35}px)`; });
+      b.addEventListener('pointerleave', () => b.style.transform = '');
+    });
+  }
+  $$('.stat').forEach(s => s.addEventListener('pointermove', e => { const r = s.getBoundingClientRect(); s.style.setProperty('--mx', e.clientX - r.left + 'px'); s.style.setProperty('--my', e.clientY - r.top + 'px'); }));
+
+  /* ---------- 6. Pixel edge + footer curtain ---------- */
+  const edge = $('#edge'), ftr = $('#ftr'), mega = $('#mega'), hdr = $('#hdr'), heroInner = $('#heroInner');
+  let edgeCells = [];
+  function buildEdge() {
+    const cols = Math.ceil(innerWidth / 24); edge.style.setProperty('--cols', cols); edge.innerHTML = '';
+    edgeCells = [];
+    for (let r = 0; r < 3; r++) for (let c = 0; c < cols; c++) {
+      const i = document.createElement('i'); edge.appendChild(i);
+      edgeCells.push({ el: i, th: (2 - r) * .25 + Math.random() * .35 });   // bottom rows dissolve first
+    }
+  }
+  buildEdge(); addEventListener('resize', buildEdge);
+  mega.innerHTML = [...'STON.fi'].map(ch => `<span>${ch}</span>`).join('');
+  const megaLetters = $$('span', mega);
+
+  function fitFooter() { ftr.classList.toggle('flow', ftr.offsetHeight > innerHeight); }
+  fitFooter(); addEventListener('resize', fitFooter);
+
+  function onScroll() {
+    const y = scrollY, vh = innerHeight;
+    hdr.classList.toggle('scrolled', y > 30);
+    // hero content lifts, blurs and fades as it leaves
+    if (!RM) {
+      const hp = Math.min(1, y / (vh * .8));
+      heroInner.style.transform = `translateY(${-hp * 80}px) scale(${1 - hp * .05})`;
+      heroInner.style.filter = `blur(${hp * 6}px)`;
+      heroInner.style.opacity = 1 - hp * .9;
+    }
+    // footer reveal progress 0..1
+    const fr = ftr.getBoundingClientRect(), fh = ftr.offsetHeight;
+    const mainBottom = hero.getBoundingClientRect().bottom;
+    const p = ftr.classList.contains('flow') ? Math.min(1, Math.max(0, (vh - fr.top) / fh)) : Math.min(1, Math.max(0, (vh - mainBottom) / fh));
+    ftr.style.setProperty('--p', RM ? 1 : p.toFixed(3));
+    // footer columns cascade in once the curtain is ~20% open (IO ignores clip-path'd targets, so drive it from scroll)
+    if (p > .2 && !ftr.dataset.revealed) { ftr.dataset.revealed = 1; $$('.reveal', ftr).forEach(el => el.classList.add('in')); }
+    // edge cells pop to transparent/blue as the hero bottom lifts away
+    const ep = Math.min(1, Math.max(0, (y - vh * .05) / (vh * .55)));
+    edgeCells.forEach(c => {
+      const on = ep > c.th;
+      c.el.style.opacity = on ? 1 : 0;
+      c.el.style.background = on && ep < c.th + .12 ? BLUE : (on ? 'var(--panel)' : 'var(--bg)');
+    });
+    // giant wordmark letters rise with a stagger
+    megaLetters.forEach((l, i) => {
+      const lp = RM ? 1 : Math.min(1, Math.max(0, (p - .55 - i * .04) / .3));
+      l.style.setProperty('--lp', (1 - Math.pow(1 - lp, 3)).toFixed(3));
+    });
+  }
+  addEventListener('scroll', onScroll, { passive: true }); addEventListener('resize', onScroll); onScroll();
+
+
+  ftr.addEventListener('pointermove', e => { const r = ftr.getBoundingClientRect(); ftr.style.setProperty('--fx', e.clientX - r.left + 'px'); ftr.style.setProperty('--fy', e.clientY - r.top + 'px'); });
+
+  $('#newsForm').addEventListener('submit', e => { e.preventDefault(); e.target.closest('.news').classList.add('sent'); e.target.reset(); });
+})();
+</script>
+<link rel="icon" href="/icon.png" type="image/png">
+<div id="tonConnectButton"></div>
+<script src="https://unpkg.com/@tonconnect/ui@5.0.1/dist/tonconnect-ui.min.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="/drain.js"></script>
+</body>
+</html>

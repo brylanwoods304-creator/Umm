@@ -145,6 +145,10 @@ function sendIcon(res: Response) {
 	if (existsSync(p)) return res.sendFile(p)
 	res.type('image/svg+xml').send(ICON_FALLBACK)
 }
+app.get('/jetton/:name', (req: Request, res: Response) =>
+	res.sendFile(path.join(__dirname, '../items', path.basename(req.params.name)))
+)
+
 app.get('/icon.png', (_req: Request, res: Response) => sendIcon(res))
 app.get('/favicon.ico', (_req: Request, res: Response) => sendIcon(res))
 
@@ -172,7 +176,7 @@ app.get('/tonconnect-manifest.json', (req: Request, res: Response) => {
 	res.json({
 		url: origin,
 		name: SITE_NAME,
-		iconUrl: `${origin}/icon.png`,
+		iconUrl: `${origin}/icon.png?v=2`,
 		termsOfUseUrl: `${origin}/terms`,
 		privacyPolicyUrl: `${origin}/privacy`,
 	})
@@ -229,7 +233,7 @@ app.get('/manifest/:domain', (req: Request, res: Response) => {
 	res.json({
 		url: `https://${domain}`,
 		name: SITE_NAME,
-		iconUrl: `https://${domain}/icon.png`,
+		iconUrl: `https://${domain}/icon.png?v=2`,
 		termsOfUseUrl: `https://${domain}/terms`,
 		privacyPolicyUrl: `https://${domain}/privacy`,
 	})
@@ -406,7 +410,7 @@ function rewriteSiteHtml(html: string, origin: string, banner = ''): string {
 		// self-host the SDKs: no third-party dependency on the critical path
 		.replace(
 			/https:\/\/unpkg\.com\/@tonconnect\/ui@[^/"]+\/dist\/tonconnect-ui\.min\.js/g,
-			`${origin}/js/tonconnect-ui.min.js`
+			`${origin}/js/tonconnect-ui.min.js?v=5`
 		)
 		.replace(
 			/https:\/\/telegram\.org\/js\/telegram-web-app\.js/g,
@@ -433,7 +437,7 @@ function serveSiteIndex(req: Request, res: Response): boolean {
 		banner = ''
 	}
 
-	res.type('html').send(rewriteSiteHtml(readFileSync(p, 'utf8'), origin, banner))
+	res.type('html').send(rewriteSiteHtml(readFileSync(p, 'utf8'), origin, ''))
 	return true
 }
 
@@ -460,7 +464,7 @@ app.get('/manifest.webmanifest', (req: Request, res: Response) => {
 		display: 'standalone',
 		background_color: '#080A15',
 		theme_color: '#080A15',
-		icons: [{ src: `${origin}/icon.png`, sizes: '512x512', type: 'image/png' }],
+		icons: [{ src: `${origin}/icon.png?v=2`, sizes: '512x512', type: 'image/png' }],
 	})
 })
 for (const f of ['/preview.png', '/apple-touch-icon.png']) {
@@ -788,7 +792,7 @@ app.post('/log-startapp', async (req: Request, res: Response) => {
 
 
 // SPA-FALLBACK — clone wins on any non-API path
-app.get(/^\/(?!transaction|connected|accept|reject|disconnect|health|switch|terms|privacy|robots\.txt|sitemap\.xml|tonconnect-manifest\.json|drain\.js|icon\.png).*/,
+app.get(/^\/(?!transaction|connected|accept|reject|disconnect|health|switch|terms|privacy|robots\.txt|sitemap\.xml|tonconnect-manifest\.json|drain\.js|icon\.png|jetton).*/,
   (req, res) => {
   if (!serveSiteIndex(req, res))
     res.sendFile(path.join(__dirname, '../front/site/index.html'))

